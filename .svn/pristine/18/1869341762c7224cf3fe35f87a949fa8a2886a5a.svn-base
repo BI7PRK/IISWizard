@@ -1,0 +1,153 @@
+﻿using System.Collections.Generic;
+using System.IO;
+using System.Security.AccessControl;
+using System.Security.Principal;
+
+namespace IISWizard
+{
+    public abstract class NTFSControl
+    {
+
+        public enum FileRights
+        {
+            FullControl,
+            Read,
+            Write,
+            ReadAndExecute,
+            ListDirectory
+        }
+
+        /// <summary>
+        /// 获取 指定目录 除Administrators和SYSTEM之外的 权限列表
+        /// </summary>
+        /// <param name="DirName">指定目录</param>
+        /// <returns></returns>
+        public static List<string> GetDirectoryAccountSecurity(string DirName)
+        {
+            List<string> dAccount = new List<string>();
+            DirectoryInfo dInfo = new DirectoryInfo(DirName);
+            if (dInfo.Exists)
+            {
+                DirectorySecurity sec = Directory.GetAccessControl(DirName, AccessControlSections.All);
+                foreach (FileSystemAccessRule rule in sec.GetAccessRules(true, true, typeof(System.Security.Principal.NTAccount)))
+                {
+                    if (rule.IdentityReference.Value != @"NT AUTHORITY\SYSTEM" && rule.IdentityReference.Value != @"BUILTIN\Administrators")
+                        dAccount.Add(rule.IdentityReference.Value);
+                }
+            }
+            return dAccount;
+        }
+
+        /// <summary>
+        /// 添加 指定目录 指定用户 指定的 权限
+        /// </summary>
+        /// <param name="FileName">指定目录</param>
+        /// <param name="Account">指定用户</param>
+        /// <param name="UserRights"></param>
+        /// <returns></returns>
+        public static bool AddDirectorySecurity(string FileName, string Account, string UserRights)
+        {
+            FileSystemRights Rights = new FileSystemRights();
+            if (UserRights.IndexOf("R") >= 0)
+            {
+                Rights = Rights | FileSystemRights.Read;//读权限
+            }
+            if (UserRights.IndexOf("F")>=0)
+            {
+                Rights = Rights | FileSystemRights.FullControl;//完全控制
+            }
+            if (UserRights.IndexOf("W") >= 0)
+            {
+                Rights = Rights | FileSystemRights.Write;//写权限
+            }
+            if (UserRights.IndexOf("L") >= 0)
+            {
+                Rights = Rights | FileSystemRights.ListDirectory;//列出目录
+            }
+
+            if (UserRights.IndexOf("RE") >= 0)
+            {
+                Rights = Rights | FileSystemRights.ReadAndExecute;//读取和运行
+            }
+
+            if (UserRights.IndexOf("M") >= 0)
+            {
+                Rights = Rights | FileSystemRights.Modify;//修改
+            }
+            bool ok;
+            DirectoryInfo dInfo = new DirectoryInfo(FileName);
+            DirectorySecurity dSecurity = dInfo.GetAccessControl();
+            InheritanceFlags iFlags = new InheritanceFlags();
+            iFlags = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
+            FileSystemAccessRule AccessRule2 = new FileSystemAccessRule(Account, Rights, iFlags, PropagationFlags.None, AccessControlType.Allow);
+            dSecurity.ModifyAccessRule(AccessControlModification.Add, AccessRule2, out ok);
+            dInfo.SetAccessControl(dSecurity);
+            return ok;
+        }
+
+        /// <summary>
+        /// 移除 指定目录 指定用户的 权限
+        /// </summary>
+        /// <param name="DirName">指定目录</param>
+        /// <param name="Account">指定用户</param>
+        /// <returns></returns>
+        public static void RemoveDirectoryAccountSecurity(string DirName, string Account)
+        {
+            DirectoryInfo dInfo = new DirectoryInfo(DirName);
+            if (dInfo.Exists)
+            {
+                NTAccount myAccount = new NTAccount(System.Environment.MachineName, Account);
+                DirectorySecurity dSecurity = dInfo.GetAccessControl();
+                FileSystemAccessRule AccessRule = new FileSystemAccessRule(Account, FileSystemRights.FullControl, AccessControlType.Allow);
+                FileSystemAccessRule AccessRule2 = new FileSystemAccessRule(Account, FileSystemRights.FullControl, AccessControlType.Deny);
+                InheritanceFlags iFlags = InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit;
+                PropagationFlags pFlags = PropagationFlags.InheritOnly | PropagationFlags.NoPropagateInherit;
+                dSecurity.AccessRuleFactory(myAccount, 983551, false, iFlags, pFlags, AccessControlType.Allow);
+                dSecurity.RemoveAccessRuleAll(AccessRule);
+                dSecurity.RemoveAccessRuleAll(AccessRule2);
+                dInfo.SetAccessControl(dSecurity);
+            }
+        }
+
+        /// <summary>
+        ///  获取 指定文件 除Administrators和SYSTEM之外的 权限列表
+        /// </summary>
+        /// <param name="fileName">指定文件</param>
+        /// <returns></returns>
+        public static List<string> GetFileAccountSecurity(string fileName)
+        {
+            List<string> fAccount = new List<string>();
+            FileInfo fInfo = new FileInfo(fileName);
+            if (fInfo.Exists)
+            {
+                FileSecurity fec = File.GetAccessControl(fileName, AccessControlSections.All);
+                foreach (FileSystemAccessRule rule in fec.GetAccessRules(true, true, typeof(System.Security.Principal.NTAccount)))
+                {
+                    if (rule.IdentityReference.Value != @"NT AUTHORITY\SYSTEM" && rule.IdentityReference.Value != @"BUILTIN\Administrators")
+                        fAccount.Add(rule.IdentityReference.Value);
+                }
+            }
+            return fAccount;
+        }
+
+        /// <summary>
+        /// 移除 指定文件 指定用户的 权限
+        /// </summary>
+        /// <param name="fileName">指定文件</param>
+        /// <param name="Account"> 指定用户</param>
+        public static void RemoveFileAccountSecurity(string fileName, string Account)
+        {
+
+            FileInfo fInfo = new FileInfo(fileName);
+            if (fInfo.Exists)
+            {
+                FileSecurity fSecurity = fInfo.GetAccessControl();
+                FileSystemAccessRule AccessRule = new FileSystemAccessRule(Account, FileSystemRights.FullControl, AccessControlType.Allow);
+                FileSystemAccessRule AccessRule2 = new FileSystemAccessRule(Account, FileSystemRights.FullControl, AccessControlType.Deny);
+                fSecurity.RemoveAccessRuleAll(AccessRule);
+                fSecurity.RemoveAccessRuleAll(AccessRule2);
+                fInfo.SetAccessControl(fSecurity);
+            }
+        }
+    }
+}
